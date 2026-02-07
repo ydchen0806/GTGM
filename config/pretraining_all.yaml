@@ -1,44 +1,71 @@
+# ═══════════════════════════════════════════════════════════════════════
+# GTGM+ Pretraining Configuration — All Modalities (CT + MRI + EM)
+# ═══════════════════════════════════════════════════════════════════════
+#
+# This configuration enables joint pretraining on CT, MRI, and EM data.
+# Modify DATA.type to switch between modality-specific or full pretraining.
+#
+# Usage:
+#   torchrun --nnodes=1 --nproc_per_node=8 pretrain/main.py \
+#       --config config/pretraining_all.yaml
+#
+# Reference:
+#   GTGM+: Knowledge-Enhanced 3D Vision-Language Pretraining for
+#   Multi-Modal Medical Image Analysis (CVIU 2026)
+# ═══════════════════════════════════════════════════════════════════════
+
 NAME: 'pretraining_all'
 
+# ─── Model Architecture ────────────────────────────────────────────────
 MODEL:
-    model_type: 'superhuman'  # 'mala' or 'superhuman' or 'UNETR'
-    input_nc: 1
-    output_nc: 1
-    return_dict: False
-    unetr_size: [32,160,160]
-    patch_size: [4,16,16]
-    kernel_size: [1,3,3]
+    model_type: 'superhuman'  # Options: 'mala', 'superhuman', 'UNETR', 'ResUNet'
+    input_nc: 1               # Input channels
+    output_nc: 1              # Output channels
+    return_dict: False         # If True, dataset returns dict with captions
+    match_name: True           # If True, match volume name to pre-generated captions
+
+    # SwinUNETR settings
+    unetr_size: [32, 160, 160]
+    patch_size: [4, 16, 16]
+    kernel_size: [1, 3, 3]
     if_sigmoid: True
-    match_name: True
-    # for 'mala':
+
+    # Mala-specific settings
     init_mode_mala: 'kaiming'
-    # for 'superhuman':
-    filters: 
+
+    # Superhuman UNet settings
+    filters:
         - 28
         - 36
         - 48
         - 64
         - 80
-    upsample_mode: 'transposeS'  # 'bilinear', 'nearest', 'transpose', 'transposeS'
+    upsample_mode: 'transposeS'  # Options: 'bilinear', 'nearest', 'transpose', 'transposeS'
     decode_ratio: 1
-    merge_mode: 'cat'  # 'add', 'cat'
-    pad_mode: 'zero'  # 'zero', 'replicate'
-    bn_mode: 'async'  # 'sync', 'async'
-    relu_mode: 'elu'  # 'elu', 'relu', 'leaky'
-    init_mode: 'kaiming_normal'  # 'kaiming_normal', 'kaiming_uniform', 'xavier_normal', 'xavier_uniform'
+    merge_mode: 'cat'            # Options: 'add', 'cat'
+    pad_mode: 'zero'             # Options: 'zero', 'replicate'
+    bn_mode: 'async'             # Options: 'sync', 'async'
+    relu_mode: 'elu'             # Options: 'elu', 'relu', 'leaky'
+    init_mode: 'kaiming_normal'  # Options: 'kaiming_normal/uniform', 'xavier_normal/uniform'
 
+# ─── Training Settings ─────────────────────────────────────────────────
 TRAIN:
     resume: False
     if_valid: True
-    cache_path: '/braindat/lab/chenyd/RESULT/miccai23_cashes'
-    save_path: '/braindat/lab/chenyd/MODEL/miccai23_models' 
-    record_path: '/braindat/lab/chenyd/LOGs/miccai23_models'
-    caption_path: '/braindat/lab/chenyd/DATASET/offline_caption'
+
+    # ⚠️  UPDATE THESE PATHS to your local environment
+    cache_path: './results/caches'
+    save_path: './results/models'
+    record_path: './results/logs'
+    caption_path: './data/offline_caption'  # Directory containing pre-generated captions
+
     pad: 0
-    loss_func: 'MSE'   # 'MSE', 'L1'
+    loss_func: 'MSE'             # Options: 'MSE', 'L1'
     random_choice: False
     multi_scale_mse: False
-    free_layers: 9
+    free_layers: 9               # Number of frozen text encoder layers
+
+    # Optimizer settings
     opt_type: 'adam'
     total_iters: 500000
     warmup_iters: 0
@@ -48,20 +75,27 @@ TRAIN:
     valid_freq: 500
     save_freq: 1000
     decay_iters: 200000
-    weight_decay: 1e-9
+    weight_decay: 1.0e-9
     power: 1.5
 
+    # Dataloader settings
     batch_size: 16
     num_workers: 4
     if_cuda: True
+    random_seed: 555             # Set to -1 for random
 
-    random_seed: 555  # -1 is none
-
+# ─── Data Settings ──────────────────────────────────────────────────────
 DATA:
-    dataset_name: 'cremi-C'  # 'snemi3d-ac3', 'cremi-C'
-    unlabel_dataset: 'cremi-C-200'  # 'ac3_ac4', 'ac4_around', 'cremi-C-200', 'cremi-all'
-    type: 'EM' # 'CT', 'MRI', 'EM','all'
-    unlabel_datalist: 
+    dataset_name: 'cremi-C'
+    unlabel_dataset: 'cremi-C-200'
+
+    # Data type: 'CT', 'MRI', 'EM', or 'all' (joint pretraining)
+    type: 'all'
+
+    # ⚠️  UPDATE THESE PATHS to your local dataset locations
+    # EM data paths
+    folder_name: './data/em_pretrain_data'
+    unlabel_datalist:
         - 'AC4_5.h5'
         - 'AC4_6.h5'
         - 'AC4_7.h5'
@@ -70,12 +104,29 @@ DATA:
         - 'AC4_11.h5'
         - 'AC4_12.h5'
         - 'AC4_13.h5'
-    folder_name: '/braindat/lab/chenyd/DATASET/miccai_pretrain_data'
-    test_split: 25  # for speed
+
+    # CT data paths (MSD tasks)
+    # ct_data_dirs:
+    #   - '/path/to/MSD/Task03_Liver'
+    #   - '/path/to/MSD/Task06_Lung'
+    #   - '/path/to/MSD/Task05_Prostate'
+    #   - '/path/to/MSD/Task08_HepaticVessel'
+    #   - '/path/to/MSD/Task10_Colon'
+
+    # MRI data paths (MSD tasks)
+    # mri_data_dirs:
+    #   - '/path/to/MSD/Task01_BrainTumour'
+    #   - '/path/to/MSD/Task02_Heart'
+    #   - '/path/to/MSD/Task04_Hippocampus'
+    #   - '/path/to/MSD/Task07_Pancreas'
+
+    test_split: 25
     unlabel_split: 100
     unlabel_split_rate: 1
     data_folder: './data'
     if_norm_images: False
+
+    # Data augmentation (labeled)
     if_scale_aug_labeled: False
     scale_factor: 1.5
     if_filp_aug_labeled: False
@@ -92,6 +143,7 @@ DATA:
     min_sigma: 0
     max_sigma: 2
 
+    # Data augmentation (unlabeled / pretraining)
     per_mode: 1
     if_scale_aug_unlabel: False
     if_filp_aug_unlabel: True
@@ -108,45 +160,46 @@ DATA:
     if_missing_aug_unlabel: False
     if_blurenhanced_aug_unlabel: False
 
+# ─── Test Settings ──────────────────────────────────────────────────────
 TEST:
     pad: 0
-    model_name: ' '
+    model_name: ''
 
+# ─── Network Settings (for VLP) ────────────────────────────────────────
 network:
-  img_model: resnet50
-  ### this part does not control builder/trainer
-  text_model: bert
-  free_layers: 6
-  text_model_arch: general # specialized/general
-  feature_dim: 768
+    img_model: resnet50
+    text_model: bert               # Text encoder type
+    free_layers: 6                 # Frozen layers in text encoder
+    text_model_arch: general       # Options: 'specialized', 'general'
+    feature_dim: 768               # Text encoder output dimension
 
-  projection_head:
-    mlp_hidden_size: 2048
-    projection_size: 768
-  ###
+    projection_head:
+        mlp_hidden_size: 2048
+        projection_size: 768
 
-### device setting control by torchrun, not this part
+# ─── Device Settings (controlled by torchrun) ──────────────────────────
 device_id: 0
 device_num: 1
-###
 
+# ─── VLP Trainer Settings ──────────────────────────────────────────────
 trainer:
-  batch_size: 2
-  test_batch_size: 200
-  checkpoint_interval: 100000
-  max_epochs: 200
-  max_iterations: 200000
-  lr: 2.0e-5
-  num_workers: 8
-  test_interval: 2
-  loss: 'only_clip' # 
-  smooth: 'exp' # you don't need smooth here, because no prior knowledege yet
-  ratio: 0.2
+    batch_size: 2                  # Per-GPU batch size for pretraining
+    test_batch_size: 200
+    checkpoint_interval: 100000
+    max_epochs: 200
+    max_iterations: 200000         # Total pretraining iterations
+    lr: 2.0e-5                     # Learning rate
+    num_workers: 8
+    test_interval: 2
+    loss: 'only_clip'              # Loss type: 'only_clip' (CLIP + BarlowTwins)
+    smooth: 'exp'
+    ratio: 0.2
 
+# ─── Optimizer Settings ────────────────────────────────────────────────
 optimizer:
-  params:
-    lr: 2.0e-5
-    # momentum: 0.9
-    weight_decay: 5.0e-2
+    params:
+        lr: 2.0e-5
+        weight_decay: 5.0e-2
 
-wandb_name: 'generate_then_optimize_pretrain'
+# ─── Experiment Name ───────────────────────────────────────────────────
+wandb_name: 'gtgm_plus_pretrain'
